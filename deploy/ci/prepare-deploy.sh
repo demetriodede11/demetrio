@@ -16,7 +16,7 @@ if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
 fi
 
 ssh-agent -a "$ssh_dir/agent.sock" >/dev/null
-if ! SSH_AUTH_SOCK="$ssh_dir/agent.sock" SSH_ASKPASS="$ssh_dir/askpass" SSH_ASKPASS_REQUIRE=force DISPLAY=:0 ssh-add "$ssh_dir/key" </dev/null >/dev/null 2>&1; then
+if ! SSH_AUTH_SOCK="$ssh_dir/agent.sock" SSH_ASKPASS="$ssh_dir/askpass" SSH_ASKPASS_REQUIRE=force DISPLAY=:0 ssh-add "$ssh_dir/key" </dev/null >/dev/null; then
   echo 'Не удалось загрузить SSH_PRIVATE_KEY; проверь ключ и SSH_KEY_PASSPHRASE' >&2
   exit 1
 fi

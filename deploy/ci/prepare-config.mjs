@@ -80,12 +80,15 @@ for (const [name, value] of Object.entries(runtime)) {
   }
 }
 
+// Нормализуем переносы строк и случайные пробелы вокруг блока ключа.
+const privateKey = process.env.VPS_PRIVATE_KEY.replace(/\r\n?/g, '\n').trim() + '\n';
+
 // Файлы с секретами создаются только во временной директории runner.
 const dir = path.join(process.env.RUNNER_TEMP, 'demetrio-deploy');
 
 fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
-fs.writeFileSync(path.join(dir, 'key'), process.env.VPS_PRIVATE_KEY.trimEnd() + '\n', {
+fs.writeFileSync(path.join(dir, 'key'), privateKey, {
   mode: 0o600,
 });
 
