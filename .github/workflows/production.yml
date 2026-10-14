@@ -1,0 +1,116 @@
+name: Деплой на VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demetrio-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Проверки
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Настройка Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Проверка ESLint
+        run: npm run lint
+
+      - name: Проверка форматирования
+        run: npm run prettier:check
+
+      - name: Генерация типов маршрутов
+        run: npx --no-install next typegen
+
+      - name: Проверка типов TypeScript
+        run: npm run check:types
+
+  build-image:
+    name: Сборка Docker-образа
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      release_id: ${{ steps.build.outputs.release_id }}
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Сборка приложения и образа
+        id: build
+        shell: bash
+        run: bash deploy/ci/build-image.sh
+
+      - name: Сохранение образа в GitHub
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demetrio-${{ steps.build.outputs.release_id }}
+          path: ${{ runner.temp }}/demetrio-image/image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  deploy:
+    name: Деплой на VPS
+    needs: build-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Подготовка SSH и конфигурации
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.HOST_IP }}
+          VPS_USER: ${{ secrets.USERNAME }}
+          VPS_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VPS_KEY_PASSPHRASE: ${{ secrets.SSH_KEY_PASSPHRASE }}
+          VPS_HOST_FINGERPRINT: ${{ secrets.SSH_HOST_FINGERPRINT }}
+          APP_ORIGIN: ${{ secrets.APP_ORIGIN }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          API_UPSTREAM_AUTHORIZATION: ${{ secrets.API_UPSTREAM_AUTHORIZATION }}
+          API_SESSION_COOKIE_NAME: ${{ secrets.API_SESSION_COOKIE_NAME }}
+        run: bash deploy/ci/prepare-deploy.sh
+
+      - name: Скачивание образа
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: demetrio-${{ needs.build-image.outputs.release_id }}
+          path: ${{ runner.temp }}/demetrio-deploy
+          digest-mismatch: error
+
+      - name: Деплой на VPS
+        shell: bash
+        env:
+          RELEASE_ID: ${{ needs.build-image.outputs.release_id }}
+        run: bash deploy/ci/upload-release.sh
+
+      - name: Удаление временных файлов
+        if: always()
+        shell: bash
+        run: bash deploy/ci/cleanup.sh

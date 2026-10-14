@@ -1,0 +1,30 @@
+# В контекст сборки включаем только файлы приложения и проверок.
+**
+!deploy/
+!deploy/Dockerfile
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!eslint.config.mjs
+!.prettierrc
+!.prettierignore
+!README.md
+!eslint/
+!eslint/**
+!src/
+!src/**
+!public/
+!public/**
+!docs/
+!docs/**
+
+# Локальные настройки и секреты исключаются также из разрешённых папок.
+**/.env
+**/.env.*
+**/.idea
+**/.idea/**
+**/.ssh
+**/.ssh/**
+**/*.pem
+**/*.key

@@ -1,6 +1,7 @@
 // Next.js обрабатывает server-only встроенно; отдельная npm-зависимость не требуется.
 // eslint-disable-next-line import/no-unresolved -- Служебный импорт разрешает сборщик Next.js.
 import 'server-only';
+import { isIP } from 'node:net';
 
 // Адрес браузера может отличаться от внутреннего адреса Next.js за обратным прокси.
 export const getAppOrigin = (requestUrl: string): string => {
@@ -16,9 +17,12 @@ export const getAppOrigin = (requestUrl: string): string => {
   }
 
   const origin = new URL(value);
+  const hostname = origin.hostname.replace(/^\[|\]$/g, '');
 
+  // HTTP в production допускается только для временного запуска по IP.
   const allowedProtocol =
-    origin.protocol === 'https:' || (!isProduction && origin.protocol === 'http:');
+    origin.protocol === 'https:' ||
+    (origin.protocol === 'http:' && (!isProduction || isIP(hostname) !== 0));
 
   if (
     !allowedProtocol ||
@@ -29,7 +33,7 @@ export const getAppOrigin = (requestUrl: string): string => {
     origin.pathname !== '/'
   ) {
     throw new Error(
-      'APP_ORIGIN должен быть HTTP(S) origin без пути и credentials; production — HTTPS',
+      'APP_ORIGIN должен быть HTTP(S) origin без пути и credentials; HTTP в production — только IP',
     );
   }
 

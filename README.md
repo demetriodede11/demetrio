@@ -25,3 +25,4 @@ npm run prettier:check
 - [Настройка API и автогенерация](docs/api.md)
 - [Написание запросов](docs/requests.md)
 - [Кодстайл](docs/code-style.md)
+- [Docker и деплой на VPS](docs/deployment.md)
