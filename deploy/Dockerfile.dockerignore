@@ -4,6 +4,7 @@
 !deploy/Dockerfile
 !package.json
 !package-lock.json
+!.npmrc
 !next.config.ts
 !tsconfig.json
 !eslint.config.mjs
