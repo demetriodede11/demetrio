@@ -9,7 +9,7 @@ if [[ ! "$release_id" =~ ^[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]; then
 fi
 
 deployment_root=/opt/demetrio
-release_dir="$deployment_root/releases/$release_id"
+release_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 image="demetrio:$release_id"
 app=demetrio
 backup="demetrio-previous-$release_id"

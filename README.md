@@ -22,7 +22,9 @@ npm run prettier:check
 
 ## Документация
 
+- [Переменные окружения](docs/environment.md)
 - [Настройка API и автогенерация](docs/api.md)
 - [Написание запросов](docs/requests.md)
 - [Кодстайл](docs/code-style.md)
 - [Docker и деплой на VPS](docs/deployment.md)
+- [Кейсы CI/CD и отката](docs/deployment-cases.md)

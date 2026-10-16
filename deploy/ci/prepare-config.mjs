@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import { isIP } from 'node:net';
 import path from 'node:path';
 
-// Значения поступают из env шага GitHub Actions, а не из файлов проекта.
 const required = [
   'RUNNER_TEMP',
   'VPS_HOST',
@@ -46,11 +45,11 @@ const getOrigin = (name, allowHttpIp) => {
 
   const ip = isIP(url.hostname.replace(/^\[|\]$/g, ''));
 
-  const allowedProtocol =
-    url.protocol === 'https:' || (allowHttpIp && ip && url.protocol === 'http:');
+  const isAllowedProtocol =
+    url.protocol === 'https:' || (url.protocol === 'http:' && allowHttpIp && ip !== 0);
 
   if (
-    !allowedProtocol ||
+    !isAllowedProtocol ||
     url.username ||
     url.password ||
     url.pathname !== '/' ||

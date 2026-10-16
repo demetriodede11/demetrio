@@ -1,23 +1,27 @@
-name: Деплой на VPS
+name: Проверки, сборка и деплой
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: demetrio-production
-  cancel-in-progress: false
-
 jobs:
-  checks:
-    name: Проверки
-    if: github.ref == 'refs/heads/main'
+  build:
+    name: ${{ github.ref == 'refs/heads/main' && 'Проверки и сборка образа' || 'Проверки' }}
+    if: "!cancelled() && startsWith(github.ref, 'refs/heads/')"
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
+
+    concurrency:
+      group: demetrio-build-${{ github.ref }}
+      cancel-in-progress: true
+
+    outputs:
+      release_id: ${{ steps.image.outputs.release_id }}
+
     steps:
       - name: Получение исходников
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,40 +37,29 @@ jobs:
       - name: Установка зависимостей
         run: npm ci
 
-      - name: Проверка ESLint
-        run: npm run lint
-
-      - name: Проверка форматирования
-        run: npm run prettier:check
-
       - name: Генерация типов маршрутов
         run: npx --no-install next typegen
 
-      - name: Проверка типов TypeScript
-        run: npm run check:types
+      - parallel:
+          - name: Проверка ESLint
+            run: npm run lint
 
-  build-image:
-    name: Сборка Docker-образа
-    needs: checks
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    outputs:
-      release_id: ${{ steps.build.outputs.release_id }}
-    steps:
-      - name: Получение исходников
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+          - name: Проверка форматирования
+            run: npm run prettier:check
+
+          - name: Проверка типов TypeScript
+            run: npm run check:types
 
       - name: Сборка приложения и образа
-        id: build
-        shell: bash
+        id: image
+        if: github.ref == 'refs/heads/main'
         run: bash deploy/ci/build-image.sh
 
       - name: Сохранение образа в GitHub
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: demetrio-${{ steps.build.outputs.release_id }}
+          name: demetrio-${{ steps.image.outputs.release_id }}
           path: ${{ runner.temp }}/demetrio-image/image.tar.gz
           if-no-files-found: error
           compression-level: 0
@@ -74,17 +67,30 @@ jobs:
 
   deploy:
     name: Деплой на VPS
-    needs: build-image
+    needs: build
+    if: "!cancelled() && github.ref == 'refs/heads/main' && needs.build.result == 'success'"
     runs-on: ubuntu-24.04
+
     timeout-minutes: 15
+    concurrency:
+      group: demetrio-production
+      cancel-in-progress: false
+      queue: max
     steps:
-      - name: Получение исходников
+      - name: Получение скриптов из текущего main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           persist-credentials: false
 
+      - name: Проверка актуальности релиза
+        id: release
+        env:
+          RELEASE_ID: ${{ needs.build.outputs.release_id }}
+        run: bash deploy/ci/check-release.sh
+
       - name: Подготовка SSH и конфигурации
-        shell: bash
+        if: steps.release.outputs.deploy == 'true'
         env:
           VPS_HOST: ${{ secrets.HOST_IP }}
           VPS_USER: ${{ secrets.USERNAME }}
@@ -98,19 +104,19 @@ jobs:
         run: bash deploy/ci/prepare-deploy.sh
 
       - name: Скачивание образа
+        if: steps.release.outputs.deploy == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: demetrio-${{ needs.build-image.outputs.release_id }}
+          name: demetrio-${{ needs.build.outputs.release_id }}
           path: ${{ runner.temp }}/demetrio-deploy
           digest-mismatch: error
 
       - name: Деплой на VPS
-        shell: bash
+        if: steps.release.outputs.deploy == 'true'
         env:
-          RELEASE_ID: ${{ needs.build-image.outputs.release_id }}
+          RELEASE_ID: ${{ needs.build.outputs.release_id }}
         run: bash deploy/ci/upload-release.sh
 
       - name: Удаление временных файлов
         if: always()
-        shell: bash
         run: bash deploy/ci/cleanup.sh
